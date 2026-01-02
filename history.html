@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sales History</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.22.0/firebase-app-compat.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.22.0/firebase-auth-compat.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.22.0/firebase-firestore-compat.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50">
+    <nav class="bg-white shadow-lg mb-4">
+        <div class="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
+            <a href="dashboard.html" class="flex items-center text-indigo-600 hover:text-indigo-800">
+                <svg class="w-6 h-6 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+                </svg>
+                Back to Dashboard
+            </a>
+            <h1 class="text-2xl font-bold text-gray-800">Sales History</h1>
+            <div></div>
+        </div>
+    </nav>
+
+    <div class="max-w-7xl mx-auto px-4">
+        <!-- Tabs -->
+        <div class="flex gap-2 mb-6">
+            <button id="salesTab" class="tab-btn px-6 py-3 bg-white text-indigo-600 border-b-2 border-indigo-600 font-semibold rounded-t-lg">
+                Sales History
+            </button>
+            <button id="inventoryTab" class="tab-btn px-6 py-3 bg-gray-100 text-gray-600 font-semibold rounded-t-lg hover:bg-gray-200">
+                Inventory Adjustments
+            </button>
+        </div>
+
+        <!-- Sales History Section -->
+        <div id="salesSection" class="bg-white rounded-xl shadow-md p-6">
+            <div class="flex flex-col sm:flex-row gap-4 mb-6">
+                <input type="date" id="startDate" class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                <input type="date" id="endDate" class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                <button id="filterBtn" class="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition">
+                    Filter
+                </button>
+                <button id="exportBtn" class="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition">
+                    Export CSV
+                </button>
+            </div>
+
+            <!-- Summary Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                <div class="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg p-4">
+                    <p class="text-sm text-gray-600 mb-1">Total Sales</p>
+                    <p id="totalSales" class="text-2xl font-bold text-gray-900">₱0.00</p>
+                </div>
+                <div class="bg-gradient-to-br from-green-50 to-green-100 rounded-lg p-4">
+                    <p class="text-sm text-gray-600 mb-1">Total Orders</p>
+                    <p id="totalOrders" class="text-2xl font-bold text-gray-900">0</p>
+                </div>
+                <div class="bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg p-4">
+                    <p class="text-sm text-gray-600 mb-1">Avg Order</p>
+                    <p id="avgOrder" class="text-2xl font-bold text-gray-900">₱0.00</p>
+                </div>
+                <div class="bg-gradient-to-br from-yellow-50 to-yellow-100 rounded-lg p-4">
+                    <p class="text-sm text-gray-600 mb-1">Discounts</p>
+                    <p id="totalDiscounts" class="text-2xl font-bold text-gray-900">₱0.00</p>
+                </div>
+            </div>
+
+            <!-- Sales Table -->
+            <div class="overflow-x-auto">
+                <table class="w-full">
+                    <thead class="bg-gray-50 border-b">
+                        <tr>
+                            <th class="px-4 py-3 text-left text-sm font-semibold text-gray-700">Date & Time</th>
+                            <th class="px-4 py-3 text-left text-sm font-semibold text-gray-700">Items</th>
+                            <th class="px-4 py-3 text-left text-sm font-semibold text-gray-700">Subtotal</th>
+                            <th class="px-4 py-3 text-left text-sm font-semibold text-gray-700">Discount</th>
+                            <th class="px-4 py-3 text-left text-sm font-semibold text-gray-700">Total</th>
+                            <th class="px-4 py-3 text-left text-sm font-semibold text-gray-700">Cashier</th>
+                            <th class="px-4 py-3 text-right text-sm font-semibold text-gray-700">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="salesTable" class="divide-y divide-gray-200"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Inventory Adjustments Section -->
+        <div id="inventorySection" class="hidden bg-white rounded-xl shadow-md p-6">
+            <div class="flex flex-col sm:flex-row gap-4 mb-6">
+                <input type="date" id="invStartDate" class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                <input type="date" id="invEndDate" class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                <button id="filterInvBtn" class="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition">
+                    Filter
+                </button>
+            </div>
+
+            <div class="overflow-x-auto">
+                <table class="w-full">
+                    <thead class="bg-gray-50 border-b">
+                        <tr>
+                            <th class="px-4 py-3 text-left text-sm font-semibold text-gray-700">Date & Time</th>
+                            <th class="px-4 py-3 text-left text-sm font-semibold text-gray-700">Product</th>
+                            <th class="px-4 py-3 text-left text-sm font-semibold text-gray-700">Type</th>
+                            <th class="px-4 py-3 text-left text-sm font-semibold text-gray-700">Change</th>
+                            <th class="px-4 py-3 text-left text-sm font-semibold text-gray-700">Old → New</th>
+                            <th class="px-4 py-3 text-left text-sm font-semibold text-gray-700">User</th>
+                            <th class="px-4 py-3 text-left text-sm font-semibold text-gray-700">Reason</th>
+                        </tr>
+                    </thead>
+                    <tbody id="inventoryTable" class="divide-y divide-gray-200"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sale Details Modal -->
+    <div id="saleModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-xl shadow-2xl max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-2xl font-bold text-gray-800">Sale Details</h2>
+                <button id="closeSaleModal" class="text-gray-500 hover:text-gray-700">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+            
+            <div class="space-y-4">
+                <div class="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                        <p class="text-gray-600">Date & Time:</p>
+                        <p id="detailDate" class="font-semibold text-gray-800"></p>
+                    </div>
+                    <div>
+                        <p class="text-gray-600">Cashier:</p>
+                        <p id="detailCashier" class="font-semibold text-gray-800"></p>
+                    </div>
+                </div>
+
+                <div class="border-t pt-4">
+                    <h3 class="font-semibold text-gray-800 mb-3">Items Purchased</h3>
+                    <table class="w-full text-sm">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-3 py-2 text-left">Item</th>
+                                <th class="px-3 py-2 text-center">Qty</th>
+                                <th class="px-3 py-2 text-right">Price</th>
+                                <th class="px-3 py-2 text-right">Total</th>
+                            </tr>
+                        </thead>
+                        <tbody id="detailItems" class="divide-y"></tbody>
+                    </table>
+                </div>
+
+                <div class="border-t pt-4 space-y-2">
+                    <div class="flex justify-between">
+                        <span class="text-gray-700">Subtotal:</span>
+                        <span id="detailSubtotal" class="font-semibold">₱0.00</span>
+                    </div>
+                    <div class="flex justify-between text-red-600">
+                        <span>Discount:</span>
+                        <span id="detailDiscount">-₱0.00</span>
+                    </div>
+                    <div class="flex justify-between text-lg font-bold text-gray-900 pt-2 border-t">
+                        <span>Total:</span>
+                        <span id="detailTotal">₱0.00</span>
+                    </div>
+                    <div class="flex justify-between text-gray-700">
+                        <span>Cash Received:</span>
+                        <span id="detailCash">₱0.00</span>
+                    </div>
+                    <div class="flex justify-between text-green-600 font-semibold">
+                        <span>Change:</span>
+                        <span id="detailChange">₱0.00</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyBR_PXkHxujRckgNXap4MqdH8MY98OQ_RI",
+  authDomain: "pos-2-f566c.firebaseapp.com",
+  projectId: "pos-2-f566c",
+  storageBucket: "pos-2-f566c.firebasestorage.app",
+  messagingSenderId: "1044464998936",
+  appId: "1:1044464998936:web:ba368da8dc0d78ced8c16d"
+        };
+
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+
+        let sales = [];
+        let inventoryAdjustments = [];
+
+        auth.onAuthStateChanged((user) => {
+            if (!user) {
+                window.location.href = 'index.html';
+                return;
+            }
+            loadSales();
+        });
+
+        // Initialize dates
+        const today = new Date();
+        const oneMonthAgo = new Date(today);
+        oneMonthAgo.setMonth(today.getMonth() - 1);
+        
+        document.getElementById('startDate').valueAsDate = oneMonthAgo;
+        document.getElementById('endDate').valueAsDate = today;
+        document.getElementById('invStartDate').valueAsDate = oneMonthAgo;
+        document.getElementById('invEndDate').valueAsDate = today;
+
+        async function loadSales() {
+            try {
+                const startDate = new Date(document.getElementById('startDate').value);
+                const endDate = new Date(document.getElementById('endDate').value);
+                endDate.setHours(23, 59, 59, 999);
+
+                const snapshot = await db.collection('sales')
+                    .where('date', '>=', startDate)
+                    .where('date', '<=', endDate)
+                    .orderBy('date', 'desc')
+                    .get();
+
+                sales = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                displaySales();
+                calculateSummary();
+            } catch (error) {
+                console.error('Error loading sales:', error);
+            }
+        }
+
+        async function loadInventoryAdjustments() {
+            try {
+                const startDate = new Date(document.getElementById('invStartDate').value);
+                const endDate = new Date(document.getElementById('invEndDate').value);
+                endDate.setHours(23, 59, 59, 999);
+
+                const snapshot = await db.collection('inventory_adjustments')
+                    .where('timestamp', '>=', startDate)
+                    .where('timestamp', '<=', endDate)
+                    .orderBy('timestamp', 'desc')
+                    .get();
+
+                inventoryAdjustments = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                displayInventoryAdjustments();
+            } catch (error) {
+                console.error('Error loading inventory adjustments:', error);
+            }
+        }
+
+        function displaySales() {
+            const table = document.getElementById('salesTable');
+            
+            table.innerHTML = sales.map(sale => {
+                const date = sale.date?.toDate ? sale.date.toDate() : new Date();
+                const itemCount = sale.items?.length || 0;
+                
+                return `
+                    <tr class="hover:bg-gray-50">
+                        <td class="px-4 py-3 text-sm text-gray-700">
+                            ${date.toLocaleDateString()}<br>
+                            <span class="text-xs text-gray-500">${date.toLocaleTimeString()}</span>
+                        </td>
+                        <td class="px-4 py-3 text-sm text-gray-700">${itemCount} item(s)</td>
+                        <td class="px-4 py-3 text-sm font-semibold text-gray-800">₱${(sale.subtotal || 0).toFixed(2)}</td>
+                        <td class="px-4 py-3 text-sm text-red-600">-₱${(sale.discount || 0).toFixed(2)}</td>
+                        <td class="px-4 py-3 text-sm font-bold text-gray-900">₱${(sale.total || 0).toFixed(2)}</td>
+                        <td class="px-4 py-3 text-sm text-gray-700">${sale.cashier || 'N/A'}</td>
+                        <td class="px-4 py-3 text-right">
+                            <button onclick="viewSaleDetails('${sale.id}')" class="text-indigo-600 hover:text-indigo-800 text-sm font-medium">
+                                View Details
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function displayInventoryAdjustments() {
+            const table = document.getElementById('inventoryTable');
+            
+            table.innerHTML = inventoryAdjustments.map(adj => {
+                const date = adj.timestamp?.toDate ? adj.timestamp.toDate() : new Date();
+                const typeColors = {
+                    add: 'text-green-600',
+                    remove: 'text-red-600',
+                    set: 'text-blue-600'
+                };
+                const typeLabels = {
+                    add: 'Add Stock',
+                    remove: 'Remove Stock',
+                    set: 'Set Stock'
+                };
+                
+                return `
+                    <tr class="hover:bg-gray-50">
+                        <td class="px-4 py-3 text-sm text-gray-700">
+                            ${date.toLocaleDateString()}<br>
+                            <span class="text-xs text-gray-500">${date.toLocaleTimeString()}</span>
+                        </td>
+                        <td class="px-4 py-3 text-sm font-semibold text-gray-800">${adj.productName}</td>
+                        <td class="px-4 py-3">
+                            <span class="text-xs font-semibold ${typeColors[adj.type]}">${typeLabels[adj.type]}</span>
+                        </td>
+                        <td class="px-4 py-3 text-sm font-semibold ${typeColors[adj.type]}">
+                            ${adj.type === 'add' ? '+' : adj.type === 'remove' ? '-' : ''}${adj.quantity}
+                        </td>
+                        <td class="px-4 py-3 text-sm text-gray-700">${adj.oldQuantity} → ${adj.newQuantity}</td>
+                        <td class="px-4 py-3 text-sm text-gray-700">${adj.user || 'N/A'}</td>
+                        <td class="px-4 py-3 text-sm text-gray-600">${adj.reason || '-'}</td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function calculateSummary() {
+            const totalSales = sales.reduce((sum, s) => sum + (s.total || 0), 0);
+            const totalOrders = sales.length;
+            const avgOrder = totalOrders > 0 ? totalSales / totalOrders : 0;
+            const totalDiscounts = sales.reduce((sum, s) => sum + (s.discount || 0), 0);
+
+            document.getElementById('totalSales').textContent = `₱${totalSales.toFixed(2)}`;
+            document.getElementById('totalOrders').textContent = totalOrders;
+            document.getElementById('avgOrder').textContent = `₱${avgOrder.toFixed(2)}`;
+            document.getElementById('totalDiscounts').textContent = `₱${totalDiscounts.toFixed(2)}`;
+        }
+
+        function viewSaleDetails(saleId) {
+            const sale = sales.find(s => s.id === saleId);
+            if (!sale) return;
+
+            const date = sale.date?.toDate ? sale.date.toDate() : new Date();
+            
+            document.getElementById('detailDate').textContent = 
+                `${date.toLocaleDateString()} ${date.toLocaleTimeString()}`;
+            document.getElementById('detailCashier').textContent = sale.cashier || 'N/A';
+            
+            const itemsHtml = (sale.items || []).map(item => `
+                <tr>
+                    <td class="px-3 py-2">${item.name}</td>
+                    <td class="px-3 py-2 text-center">${item.quantity}</td>
+                    <td class="px-3 py-2 text-right">₱${item.price.toFixed(2)}</td>
+                    <td class="px-3 py-2 text-right font-semibold">₱${(item.price * item.quantity).toFixed(2)}</td>
+                </tr>
+            `).join('');
+            
+            document.getElementById('detailItems').innerHTML = itemsHtml;
+            document.getElementById('detailSubtotal').textContent = `₱${(sale.subtotal || 0).toFixed(2)}`;
+            document.getElementById('detailDiscount').textContent = `-₱${(sale.discount || 0).toFixed(2)}`;
+            document.getElementById('detailTotal').textContent = `₱${(sale.total || 0).toFixed(2)}`;
+            document.getElementById('detailCash').textContent = `₱${(sale.cashReceived || 0).toFixed(2)}`;
+            document.getElementById('detailChange').textContent = `₱${(sale.change || 0).toFixed(2)}`;
+            
+            document.getElementById('saleModal').classList.remove('hidden');
+        }
+
+        function exportToCSV() {
+            const headers = ['Date', 'Time', 'Items', 'Subtotal', 'Discount', 'Total', 'Cashier'];
+            const rows = sales.map(sale => {
+                const date = sale.date?.toDate ? sale.date.toDate() : new Date();
+                return [
+                    date.toLocaleDateString(),
+                    date.toLocaleTimeString(),
+                    sale.items?.length || 0,
+                    (sale.subtotal || 0).toFixed(2),
+                    (sale.discount || 0).toFixed(2),
+                    (sale.total || 0).toFixed(2),
+                    sale.cashier || 'N/A'
+                ];
+            });
+
+            const csv = [headers, ...rows].map(row => row.join(',')).join('\n');
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `sales_${new Date().toISOString().split('T')[0]}.csv`;
+            a.click();
+        }
+
+        // Tab switching
+        document.getElementById('salesTab').addEventListener('click', () => {
+            document.getElementById('salesTab').classList.add('bg-white', 'text-indigo-600', 'border-b-2', 'border-indigo-600');
+            document.getElementById('salesTab').classList.remove('bg-gray-100', 'text-gray-600');
+            document.getElementById('inventoryTab').classList.remove('bg-white', 'text-indigo-600', 'border-b-2', 'border-indigo-600');
+            document.getElementById('inventoryTab').classList.add('bg-gray-100', 'text-gray-600');
+            document.getElementById('salesSection').classList.remove('hidden');
+            document.getElementById('inventorySection').classList.add('hidden');
+        });
+
+        document.getElementById('inventoryTab').addEventListener('click', () => {
+            document.getElementById('inventoryTab').classList.add('bg-white', 'text-indigo-600', 'border-b-2', 'border-indigo-600');
+            document.getElementById('inventoryTab').classList.remove('bg-gray-100', 'text-gray-600');
+            document.getElementById('salesTab').classList.remove('bg-white', 'text-indigo-600', 'border-b-2', 'border-indigo-600');
+            document.getElementById('salesTab').classList.add('bg-gray-100', 'text-gray-600');
+            document.getElementById('inventorySection').classList.remove('hidden');
+            document.getElementById('salesSection').classList.add('hidden');
+            if (inventoryAdjustments.length === 0) loadInventoryAdjustments();
+        });
+
+        // Event listeners
+        document.getElementById('filterBtn').addEventListener('click', loadSales);
+        document.getElementById('filterInvBtn').addEventListener('click', loadInventoryAdjustments);
+        document.getElementById('exportBtn').addEventListener('click', exportToCSV);
+        document.getElementById('closeSaleModal').addEventListener('click', () => {
+            document.getElementById('saleModal').classList.add('hidden');
+        });
+    </script>
+</body>
+</html>
