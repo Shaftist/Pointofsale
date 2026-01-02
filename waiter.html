@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Waiter - Order Taking</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.22.0/firebase-app-compat.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.22.0/firebase-auth-compat.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.22.0/firebase-firestore-compat.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { touch-action: pan-y; }
+        .product-card { touch-action: manipulation; }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen pb-24">
+    <!-- Header -->
+    <div class="bg-gradient-to-r from-indigo-600 to-purple-600 text-white sticky top-0 z-50 shadow-lg">
+        <div class="px-4 py-4">
+            <div class="flex justify-between items-center mb-3">
+                <div>
+                    <h1 class="text-2xl font-bold">Waiter Mode</h1>
+                    <p id="waiterName" class="text-sm opacity-90"></p>
+                </div>
+                <button id="logoutBtn" class="bg-white bg-opacity-20 px-4 py-2 rounded-lg text-sm font-medium hover:bg-opacity-30 transition">
+                    Logout
+                </button>
+            </div>
+            
+            <!-- Table Number -->
+            <div class="bg-white bg-opacity-20 rounded-lg p-3">
+                <label class="block text-sm font-medium mb-2">Table Number</label>
+                <input type="text" id="tableNumber" placeholder="Enter table number" 
+                    class="w-full px-4 py-2 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-white">
+            </div>
+        </div>
+    </div>
+
+    <!-- Search and Filter -->
+    <div class="px-4 py-4 bg-white shadow-sm sticky top-36 z-40">
+        <input type="text" id="searchInput" placeholder="🔍 Search menu..." 
+            class="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-indigo-500 focus:outline-none text-lg">
+        
+        <div class="flex gap-2 mt-3 overflow-x-auto pb-2">
+            <button class="category-btn px-4 py-2 bg-indigo-600 text-white rounded-full whitespace-nowrap text-sm font-medium" data-category="all">All</button>
+            <button class="category-btn px-4 py-2 bg-gray-200 text-gray-700 rounded-full whitespace-nowrap text-sm font-medium" data-category="food">🍕 Food</button>
+            <button class="category-btn px-4 py-2 bg-gray-200 text-gray-700 rounded-full whitespace-nowrap text-sm font-medium" data-category="drinks">🥤 Drinks</button>
+            <button class="category-btn px-4 py-2 bg-gray-200 text-gray-700 rounded-full whitespace-nowrap text-sm font-medium" data-category="desserts">🍰 Desserts</button>
+        </div>
+    </div>
+
+    <!-- Products Grid -->
+    <div id="productsGrid" class="px-4 py-4 grid grid-cols-2 gap-4"></div>
+
+    <!-- Floating Cart Button -->
+    <div class="fixed bottom-0 left-0 right-0 bg-white border-t-2 border-gray-200 p-4 z-50">
+        <button id="viewCartBtn" class="w-full bg-gradient-to-r from-indigo-600 to-purple-600 text-white py-4 rounded-xl font-bold text-lg shadow-lg flex items-center justify-between hover:shadow-xl transition">
+            <span>View Cart</span>
+            <div class="flex items-center">
+                <span id="cartCount" class="bg-white text-indigo-600 rounded-full w-8 h-8 flex items-center justify-center font-bold mr-2">0</span>
+                <span id="cartTotal">₱0.00</span>
+            </div>
+        </button>
+    </div>
+
+    <!-- Cart Modal -->
+    <div id="cartModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-end">
+        <div class="bg-white w-full rounded-t-3xl shadow-2xl max-h-[85vh] flex flex-col">
+            <!-- Modal Header -->
+            <div class="p-6 border-b flex justify-between items-center">
+                <h2 class="text-2xl font-bold text-gray-800">Order Details</h2>
+                <button id="closeCartBtn" class="text-gray-500 hover:text-gray-700">
+                    <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+
+            <!-- Cart Items -->
+            <div id="cartItems" class="flex-1 overflow-y-auto p-6 space-y-4"></div>
+
+            <!-- Cart Footer -->
+            <div class="border-t p-6 space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Special Instructions</label>
+                    <textarea id="orderNotes" rows="2" placeholder="Any special requests?" 
+                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"></textarea>
+                </div>
+
+                <div class="flex justify-between items-center text-xl font-bold">
+                    <span>Total:</span>
+                    <span id="modalTotal" class="text-indigo-600">₱0.00</span>
+                </div>
+
+                <div class="space-y-2">
+                    <button id="sendOrderBtn" class="w-full bg-green-600 text-white py-4 rounded-xl font-bold text-lg hover:bg-green-700 transition">
+                        Send to Kitchen
+                    </button>
+                    <button id="clearCartBtn" class="w-full bg-gray-200 text-gray-700 py-3 rounded-xl font-medium hover:bg-gray-300 transition">
+                        Clear Order
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Success Modal -->
+    <div id="successModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-2xl p-8 text-center max-w-sm w-full">
+            <div class="bg-green-100 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg class="w-12 h-12 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                </svg>
+            </div>
+            <h3 class="text-2xl font-bold text-gray-800 mb-2">Order Sent!</h3>
+            <p class="text-gray-600 mb-6">The order has been sent to the kitchen.</p>
+            <button id="closeSuccessBtn" class="w-full bg-indigo-600 text-white py-3 rounded-lg font-semibold hover:bg-indigo-700 transition">
+                Take Another Order
+            </button>
+        </div>
+    </div>
+
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyBR_PXkHxujRckgNXap4MqdH8MY98OQ_RI",
+  authDomain: "pos-2-f566c.firebaseapp.com",
+  projectId: "pos-2-f566c",
+  storageBucket: "pos-2-f566c.firebasestorage.app",
+  messagingSenderId: "1044464998936",
+  appId: "1:1044464998936:web:ba368da8dc0d78ced8c16d"
+        };
+
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+
+        let cart = [];
+        let products = [];
+        let currentCategory = 'all';
+        let currentUser = null;
+
+        auth.onAuthStateChanged(async (user) => {
+            if (!user) {
+                window.location.href = 'index.html';
+                return;
+            }
+            currentUser = user;
+            const userInfo = JSON.parse(sessionStorage.getItem('userInfo'));
+            if (userInfo) {
+                document.getElementById('waiterName').textContent = userInfo.displayName;
+            }
+            await loadProducts();
+        });
+
+        async function loadProducts() {
+            try {
+                const snapshot = await db.collection('products').where('quantity', '>', 0).get();
+                products = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                displayProducts();
+            } catch (error) {
+                console.error('Error loading products:', error);
+            }
+        }
+
+        function displayProducts() {
+            const grid = document.getElementById('productsGrid');
+            const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+            
+            const filtered = products.filter(p => {
+                const matchesCategory = currentCategory === 'all' || p.category === currentCategory;
+                const matchesSearch = p.name.toLowerCase().includes(searchTerm);
+                return matchesCategory && matchesSearch;
+            });
+
+            grid.innerHTML = filtered.map(product => `
+                <div class="product-card bg-white rounded-2xl shadow-md p-4 active:scale-95 transition-transform cursor-pointer" 
+                    onclick="addToCart('${product.id}')">
+                    <div class="bg-gradient-to-br from-indigo-50 to-purple-50 w-full aspect-square rounded-xl flex items-center justify-center mb-3">
+                        <span class="text-5xl">${product.emoji || '🍽️'}</span>
+                    </div>
+                    <h3 class="font-bold text-gray-800 text-base mb-1">${product.name}</h3>
+                    <p class="text-indigo-600 font-bold text-lg">₱${product.price.toFixed(2)}</p>
+                    <p class="text-xs text-gray-500 mt-1">In stock: ${product.quantity}</p>
+                </div>
+            `).join('');
+        }
+
+        function addToCart(productId) {
+            const product = products.find(p => p.id === productId);
+            if (!product) return;
+
+            const existingItem = cart.find(item => item.id === productId);
+            if (existingItem) {
+                if (existingItem.quantity < product.quantity) {
+                    existingItem.quantity++;
+                } else {
+                    alert('Not enough stock available');
+                    return;
+                }
+            } else {
+                cart.push({ ...product, quantity: 1 });
+            }
+
+            // Haptic feedback for mobile
+            if (navigator.vibrate) navigator.vibrate(50);
+            
+            updateCartDisplay();
+        }
+
+        function updateCartDisplay() {
+            const itemCount = cart.reduce((sum, item) => sum + item.quantity, 0);
+            const total = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+            
+            document.getElementById('cartCount').textContent = itemCount;
+            document.getElementById('cartTotal').textContent = `₱${total.toFixed(2)}`;
+            document.getElementById('modalTotal').textContent = `₱${total.toFixed(2)}`;
+        }
+
+        function displayCartItems() {
+            const cartDiv = document.getElementById('cartItems');
+            
+            if (cart.length === 0) {
+                cartDiv.innerHTML = `
+                    <div class="text-center py-12">
+                        <div class="text-6xl mb-4">🛒</div>
+                        <p class="text-gray-500 text-lg">Cart is empty</p>
+                    </div>
+                `;
+            } else {
+                cartDiv.innerHTML = cart.map((item, index) => `
+                    <div class="bg-gray-50 rounded-xl p-4">
+                        <div class="flex items-start justify-between mb-3">
+                            <div class="flex items-center flex-1">
+                                <span class="text-3xl mr-3">${item.emoji || '🍽️'}</span>
+                                <div>
+                                    <h4 class="font-bold text-gray-800 text-base">${item.name}</h4>
+                                    <p class="text-sm text-gray-600">₱${item.price.toFixed(2)} each</p>
+                                </div>
+                            </div>
+                            <button onclick="removeFromCart(${index})" class="text-red-600 p-2">
+                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                                </svg>
+                            </button>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center bg-white rounded-lg">
+                                <button onclick="updateQuantity(${index}, -1)" 
+                                    class="w-12 h-12 text-2xl font-bold text-gray-600 hover:bg-gray-100 rounded-l-lg">−</button>
+                                <span class="w-16 text-center font-bold text-xl">${item.quantity}</span>
+                                <button onclick="updateQuantity(${index}, 1)" 
+                                    class="w-12 h-12 text-2xl font-bold text-gray-600 hover:bg-gray-100 rounded-r-lg">+</button>
+                            </div>
+                            <div class="text-xl font-bold text-indigo-600">₱${(item.price * item.quantity).toFixed(2)}</div>
+                        </div>
+                    </div>
+                `).join('');
+            }
+        }
+
+        function updateQuantity(index, change) {
+            const item = cart[index];
+            const product = products.find(p => p.id === item.id);
+            
+            const newQty = item.quantity + change;
+            if (newQty <= 0) {
+                removeFromCart(index);
+            } else if (newQty <= product.quantity) {
+                item.quantity = newQty;
+                displayCartItems();
+                updateCartDisplay();
+            } else {
+                alert('Not enough stock available');
+            }
+        }
+
+        function removeFromCart(index) {
+            cart.splice(index, 1);
+            displayCartItems();
+            updateCartDisplay();
+        }
+
+        // Event Listeners
+        document.getElementById('searchInput').addEventListener('input', displayProducts);
+
+        document.querySelectorAll('.category-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                document.querySelectorAll('.category-btn').forEach(b => {
+                    b.classList.remove('bg-indigo-600', 'text-white');
+                    b.classList.add('bg-gray-200', 'text-gray-700');
+                });
+                e.target.classList.add('bg-indigo-600', 'text-white');
+                e.target.classList.remove('bg-gray-200', 'text-gray-700');
+                currentCategory = e.target.dataset.category;
+                displayProducts();
+            });
+        });
+
+        document.getElementById('viewCartBtn').addEventListener('click', () => {
+            displayCartItems();
+            document.getElementById('cartModal').classList.remove('hidden');
+        });
+
+        document.getElementById('closeCartBtn').addEventListener('click', () => {
+            document.getElementById('cartModal').classList.add('hidden');
+        });
+
+        document.getElementById('clearCartBtn').addEventListener('click', () => {
+            if (confirm('Clear all items?')) {
+                cart = [];
+                displayCartItems();
+                updateCartDisplay();
+            }
+        });
+
+        document.getElementById('sendOrderBtn').addEventListener('click', async () => {
+            const tableNumber = document.getElementById('tableNumber').value.trim();
+            
+            if (!tableNumber) {
+                alert('Please enter a table number');
+                return;
+            }
+
+            if (cart.length === 0) {
+                alert('Cart is empty');
+                return;
+            }
+
+            try {
+                const total = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+                
+                await db.collection('orders').add({
+                    tableNumber,
+                    items: cart.map(item => ({
+                        productId: item.id,
+                        name: item.name,
+                        price: item.price,
+                        quantity: item.quantity
+                    })),
+                    total,
+                    notes: document.getElementById('orderNotes').value,
+                    waiter: currentUser.email,
+                    status: 'pending',
+                    date: firebase.firestore.FieldValue.serverTimestamp()
+                });
+
+                document.getElementById('cartModal').classList.add('hidden');
+                document.getElementById('successModal').classList.remove('hidden');
+                
+                cart = [];
+                updateCartDisplay();
+                document.getElementById('tableNumber').value = '';
+                document.getElementById('orderNotes').value = '';
+            } catch (error) {
+                console.error('Error sending order:', error);
+                alert('Error sending order. Please try again.');
+            }
+        });
+
+        document.getElementById('closeSuccessBtn').addEventListener('click', () => {
+            document.getElementById('successModal').classList.add('hidden');
+        });
+
+        document.getElementById('logoutBtn').addEventListener('click', async () => {
+            if (confirm('Are you sure you want to logout?')) {
+                await auth.signOut();
+                sessionStorage.removeItem('userInfo');
+                window.location.href = 'index.html';
+            }
+        });
+    </script>
+</body>
+</html>
