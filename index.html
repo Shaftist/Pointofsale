@@ -68,7 +68,7 @@
   projectId: "pos-2-f566c",
   storageBucket: "pos-2-f566c.firebasestorage.app",
   messagingSenderId: "1044464998936",
-  appId: "1:1044464998936:web:ba368da8dc0d78ced8c16d"
+  appId: "1:1044464998936:web:ba368da8dc0d78ced8c16d",
         };
 
         // Initialize Firebase
@@ -167,19 +167,33 @@
                 } else {
                     // Create user document if it doesn't exist
                     const isAdmin = user.email === 'admin@smbwg.com';
-                    await db.collection('users').doc(user.uid).set({
+                    const newUserData = {
                         email: user.email,
                         role: isAdmin ? 'admin' : 'cashier',
                         displayName: user.email.split('@')[0],
                         createdAt: firebase.firestore.FieldValue.serverTimestamp()
-                    });
+                    };
                     
-                    // Reload to get the created data
-                    getUserRoleAndRedirect(user);
+                    await db.collection('users').doc(user.uid).set(newUserData);
+                    
+                    // Store user info and redirect immediately
+                    const userInfo = {
+                        uid: user.uid,
+                        email: user.email,
+                        role: newUserData.role,
+                        displayName: newUserData.displayName
+                    };
+                    sessionStorage.setItem('userInfo', JSON.stringify(userInfo));
+                    
+                    if (newUserData.role === 'waiter') {
+                        window.location.href = 'waiter.html';
+                    } else {
+                        window.location.href = 'dashboard.html';
+                    }
                 }
             } catch (error) {
                 console.error('Error getting user role:', error);
-                showError('Error loading user data');
+                showError('Error loading user data. Please try again or contact support.');
                 setLoading(false);
             }
         }
